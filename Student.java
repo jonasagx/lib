@@ -15,7 +15,11 @@ public class Student {
 	}
 	
 	public Student(String name){
-		
+		this.name = name;
+	}
+	
+	public Student(int id){
+		this.id = id;
 	}
 	
 	public String getName() {
