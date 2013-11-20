@@ -1,7 +1,6 @@
 import java.net.InetAddress;
 import java.util.ArrayList;
 
-
 public class Student {
 
 	private String name;
@@ -10,8 +9,9 @@ public class Student {
 	private int id;
 
 	public Student(String name, InetAddress dep){
-		setName(name);
-		setDep(dep);
+	    setName(name);
+	    setDep(dep);
+	    this.id = this.hashCode();
 	}
 	
 	public Student(String name){
@@ -20,6 +20,10 @@ public class Student {
 	
 	public Student(int id){
 		this.id = id;
+	}
+	
+	public boolean canBorrow(){
+		return (this.books.size() <= 3) ? true : false;
 	}
 	
 	public String getName() {
