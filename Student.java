@@ -7,6 +7,7 @@ public class Student {
 	private ArrayList<String> books;
 	private InetAddress dep;
 	private int id;
+	public boolean request = false;
 
 	public Student(String name, InetAddress dep){
 	    setName(name);
@@ -14,12 +15,9 @@ public class Student {
 	    this.id = this.hashCode();
 	}
 	
-	public Student(String name){
-		this.name = name;
-	}
-	
 	public Student(int id){
 		this.id = id;
+		this.request = true;
 	}
 	
 	public boolean canBorrow(){
@@ -44,6 +42,12 @@ public class Student {
 	
 	public void addBook(String book){
 		this.books.add(book);
+	}
+	
+	public boolean removeBook(String book){
+		if(this.books.remove(book)){
+			System.out.println( book + " removido da lista de " + this.name);
+		}
 	}
 	
 	public InetAddress getDep() {

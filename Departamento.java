@@ -9,6 +9,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Stack;
 
 public class Departamento {
@@ -21,7 +22,7 @@ public class Departamento {
 	private ObjectOutputStream out;
 	private ServerSocket server;
 	
-    private ArrayList<Student> students = new ArrayList<Student>();
+    private HashMap<Integer, Student> students = new HashMap<Integer, Student>();
 	
     public Departamento(InetAddress central, String name) {
 		try {
@@ -44,10 +45,12 @@ public class Departamento {
     }
 	
     public void listen(){
+    	Processor p = new Processor(this);
     	try {
 			this.server = new ServerSocket(8081);
 			System.out.println("Departamento " + this.name + " listening");
-			this.server.accept();
+			//Passa conexão (socket) para o processador
+			p.add(this.server.accept());
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -55,17 +58,64 @@ public class Departamento {
     }
     
     public void addStudent(Student student){
-    	this.students.add(student);
+    	this.students.put(student.getId(), student);
     }
 
     public void addStudent(String name, InetAddress dep){
-		this.students.add( new Student(name, dep) );
+		Student tmp = new Student(name, dep);
+		this.students.put(tmp.getId(), tmp);
 		System.out.println(name + " adicionado!");
     }
 
+    public Student getStudent(Student student){
+    	return this.students.get(student.getId());
+    }
+    
+    public void update(Student student){
+    	this.students.put(student.getId(), student);
+    	System.out.println(student.getName() + " atualizado!");
+    }
+    
+    public void giveBack(String book, Student student){
+    	if( this.students.containsKey(student.getId()) ){
+    		this.students.get(student.getId()).removeBook(book);
+    	} else {
+    		try {
+				this.in = new ObjectInputStream( new DataInputStream(this.con.getInputStream()));
+				this.out = new ObjectOutputStream( new DataOutputStream( this.con.getOutputStream()));
+				
+				//Pede localização para central
+				this.out.writeObject( student );
+				Student stdt = (Student) this.in.readObject();
+				
+				//Cria conexão com dep
+				this.peer = new Socket(stdt.getDep(), 8081);
+				this.in = new ObjectInputStream( new DataInputStream(this.peer.getInputStream()));
+				this.out = new ObjectOutputStream( new DataOutputStream( this.peer.getOutputStream()));
+				stdt.request = true;
+				
+				//Informa o objecto requisitado
+				this.out.writeObject(stdt);
+				stdt = (Student) this.in.readObject();
+				
+				//Atualiza o objeto
+				stdt.removeBook(book);
+				stdt.request = false;
+				
+				//Devolve atualizado
+				this.out.writeObject(stdt);
+				this.peer.close();
+				
+			} catch (IOException | ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+    	}
+    }
+    
     public void borrow(String book, Student student){
-		int index = this.students.indexOf(student);
-		if(index >= 0){
+		int index = student.getId();
+		if(this.students.get(student.getId()) != null){
 			if(this.students.get(index).canBorrow()){				
 				this.students.get(index).addBook(book);
 			} else {
@@ -75,7 +125,7 @@ public class Departamento {
 		} else {
 			try {
 				this.in = new ObjectInputStream( new DataInputStream(this.con.getInputStream()));
-				
+				this.out = new ObjectOutputStream( new DataOutputStream( this.con.getOutputStream()));
 				//Envia objeto para central
 				this.out.writeObject(new Student(student.getId()));
 				//Recebe da central
@@ -98,7 +148,7 @@ public class Departamento {
 				}
 	
 				//Devolve objeto modificado;
-				this.out.writeObject(stdt);	
+				this.out.writeObject(stdt);
 				this.peer.close();
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
@@ -112,9 +162,14 @@ public class Departamento {
 }
 
 class Processor extends Thread {
-	private Stack<Student> pilha;
+	private Stack<Socket> stack;
+	private ObjectInputStream in;
+	private ObjectOutputStream out;
+	private Socket dep;
+	private Departamento departament;
 	
-	public Processor(){
+	public Processor(Departamento d){
+		this.departament = d;
 		try {
 			this.wait();
 		} catch (InterruptedException e) {
@@ -123,8 +178,8 @@ class Processor extends Thread {
 		}
 	}
 	
-	public void add(Student student){
-		this.pilha.add(student);
+	public void add(Socket student){
+		this.stack.add(student);
 		if(this.isInterrupted()){			
 			this.notify();
 		}
@@ -132,6 +187,29 @@ class Processor extends Thread {
 	
 	@Override
 	public void run(){
-		
+		while(true){
+			this.dep = this.stack.pop();
+			try {
+				this.in = new ObjectInputStream( new DataInputStream( this.dep.getInputStream()));
+				this.out = new ObjectOutputStream( new DataOutputStream( this.dep.getOutputStream()));
+				
+				Student stdt = (Student) this.in.readObject();
+				//Diferenciar atualização de requisição
+				if(stdt.request){					
+					//Request
+					stdt = this.departament.getStudent(stdt);
+					this.out.writeObject(stdt);
+					this.dep.close();				
+					this.wait();
+				} else {
+					//Update
+					this.departament.update(stdt);
+				}
+				
+			} catch (IOException | ClassNotFoundException | InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 	}
 }
